@@ -142,14 +142,14 @@ def buffer_snake(world, snake):
     return body_buffer
 
 
-def is_safe(food_x, food_y, world, predecessor):
+def is_safe(food_x, food_y, board_map, predecessor):
     """ Determines whether or not a piece of food is 'safe'. """
 
     # get path to food
     food_path = find_path_dijkstra(food_x, food_y, predecessor)
 
     # mark map to indicate snake (path into food)
-    map = np.copy(world.map)
+    map = np.copy(board_map)
     for px, py in food_path:
         map[py][px] = objects.MAP_SNAKE
 
@@ -158,4 +158,4 @@ def is_safe(food_x, food_y, world, predecessor):
     d, p = dijkstra(map, (food_x, food_y))
     area = np.sum(d != np.inf)
 
-    return area >= 0.5 * world.width * world.height
+    return area >= 0.5 * map.shape[1] * map.shape[0]

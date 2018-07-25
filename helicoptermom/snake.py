@@ -58,7 +58,7 @@ def hungry_mode(board, you):
     nearest_food = None
     closest_distance = np.inf
     for fx, fy in board.food:
-        if distance[fy][fx] < closest_distance:  # TODO: port pathfinding.is_safe()
+        if distance[fy][fx] < closest_distance and pathfinding.is_safe(fx, fy, map, predecessor):
             closest_distance = distance[fy][fx]
             nearest_food = (fx, fy)
 
