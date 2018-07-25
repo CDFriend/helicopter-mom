@@ -51,3 +51,15 @@ class World:
 
         # get your snake by reference (API copies your snake's data)
         self.you = self.snakes[request_json["you"]["id"]]
+
+
+def make_map(board):
+    map = np.full((board.height, board.width), MAP_EMPTY)
+
+    for x, y in board.food:
+        map[y][x] = MAP_FOOD
+    for snake in board.snakes:
+        for x, y in snake.body:
+            map[y][x] = MAP_SNAKE
+
+    return map

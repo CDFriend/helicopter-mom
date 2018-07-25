@@ -8,8 +8,9 @@ import logging
 from bottle import request
 import numpy as np
 
+from bsapi.models import *
 import helicoptermom.lib.pathfinding as pathfinding
-from helicoptermom.lib.gameobjects import World
+from helicoptermom.lib.gameobjects import make_map
 from helicoptermom.lib.utils import neighbors_of
 
 app = bottle.app()
@@ -17,30 +18,25 @@ app = bottle.app()
 
 @app.post("/start")
 def start():
-    return {
-        "name": "Helicopter Mom",
-        "taunt": "Can I see your manager?",
-        "color": "#03A9F4",
-        "head_type": "tongue",
-        "tail_type": "block-bum",
-        "head_url": "https://s3-us-west-2.amazonaws.com/flx-editorial-wordpress/wp-content/uploads/2016/01/19133540/seinfeld.jpg"
-    }
+    return StartResponse("#03A9F4")
 
 
-def vornoi_defense(world):
+def vornoi_defense(board, you):
+    map = make_map(board)
+
     # Calculate d matrices for every snake
     d_matrices = {}
-    enemy_snakes = [snake for snake in world.snakes.values() if snake.id != world.you.id]
+    enemy_snakes = [snake for snake in board.snakes if snake.id != you.id]
     for snake in enemy_snakes:
-        d_matrix = pathfinding.dijkstra(world.map, snake.head)
+        d_matrix = pathfinding.dijkstra(map, snake.head())
         d_matrices.update({snake.id: d_matrix})
 
     # For each option, simulate snake move and calculate Vornoi zones
     highest_vornoi_area = -1
     highest_scoring_option = None
-    for next_point in neighbors_of(world.you.head[0], world.you.head[1], world.map):
-        np_scores, predecessor = pathfinding.dijkstra(world.map, next_point)
-        in_vornoi_zone = np.full((world.height, world.width), True, dtype=np.bool)
+    for next_point in neighbors_of(you.head()[0], you.head()[1], map):
+        np_scores, predecessor = pathfinding.dijkstra(map, next_point)
+        in_vornoi_zone = np.full((board.height, board.width), True, dtype=np.bool)
 
         # Get all points in your Vornoi zone
         for val in d_matrices.values():
@@ -51,41 +47,41 @@ def vornoi_defense(world):
             highest_vornoi_area = vornoi_area
             highest_scoring_option = next_point
 
-    return pathfinding.get_next_move(world.you.head, [highest_scoring_option])
+    return pathfinding.get_next_move(you.head(), [highest_scoring_option])
 
 
-def hungry_mode(world):
+def hungry_mode(board, you):
     """ Used when we need food. Dijkstra to nearest food. """
-    distance, predecessor = pathfinding.dijkstra(world.map, world.you.head)
+    map = make_map(board)
+    distance, predecessor = pathfinding.dijkstra(map, you.head())
 
     nearest_food = None
     closest_distance = np.inf
-    for fx, fy in world.food:
-        if distance[fy][fx] < closest_distance and pathfinding.is_safe(fx, fy, world, predecessor):
+    for fx, fy in board.food:
+        if distance[fy][fx] < closest_distance:  # TODO: port pathfinding.is_safe()
             closest_distance = distance[fy][fx]
             nearest_food = (fx, fy)
 
     if closest_distance == np.inf:
         # If we can't get to any food, use defense mode
-        return vornoi_defense(world)
+        return vornoi_defense(board, you)
     else:
         path = pathfinding.find_path_dijkstra(nearest_food[0], nearest_food[1], predecessor)
-        return pathfinding.get_next_move(world.you.head, path)
+        return pathfinding.get_next_move(you.head(), path)
 
 
 @app.post("/move")
 def move():
-    world = World(request.json)
+    snake_req = SnakeRequest(request.json)
+    board = snake_req.board
 
-    longest_snake = max(world.snakes.values(), key=lambda s: s.length)
-    if world.you.health < 60 or world.you.length < longest_snake.length:
-        next_move = hungry_mode(world)
+    longest_snake = max(board.snakes, key=lambda s: len(s.body))
+    if snake_req.you.health < 60 or len(snake_req.you.body) < len(longest_snake.body):
+        next_move = hungry_mode(board, snake_req.you)
     else:
-        next_move = vornoi_defense(world)
+        next_move = vornoi_defense(board, snake_req.you)
 
-    return {
-        "move": next_move
-    }
+    return MoveResponse(next_move)
 
 
 if __name__ == "__main__":
